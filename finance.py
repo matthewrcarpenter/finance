@@ -27,6 +27,38 @@ def get_price_data(ticker) :
 	print(f'Loaded data for {ticker}: {start_date} to {end_date}.')
 	return data
 
+def update_price_data_yahoo(price_data, ticker) :
+    # try to update from next day after end of data
+    price_data_end_date = get_df_end_date(price_data) 
+    req_start_date =  price_data_end_date + dt.timedelta(1)
+    # ... until yesterday
+    req_end_date = dt.date.today() - dt.timedelta(1)
+    
+    # Might not need to do update
+    if (req_end_date <= req_start_date) :
+    	return price_data
+
+    price_data_path = f'{DATA_PATH}/yahoo/{ticker}.csv'
+    
+    # default to original data if update fails
+    updated_data = price_data
+    
+    try :
+	    updated_data = web.DataReader(ticker, 'yahoo', req_start_date, req_end_date)
+	    actual_end_date = get_df_end_date(updated_data)
+
+	    # just return original price_data if acupdate needed
+	    if (actual_end_date <= price_data_end_date) :
+	    	return price_data
+	    else :
+        	updated_data = price_data.append(updated_data)
+        	print(f'Updated data for {ticker} from yahoo: {req_start_date} to {actual_end_date}')
+        	updated_data.to_csv(price_data_path)
+    except :
+    	print(f'Could not load updates for {ticker} from yahoo. Using cached data.')
+
+    return updated_data        
+
 def get_price_data_yahoo(ticker) :
     """Get raw ticker price data from yahoo. No data cleaning is performed on data."""
     start = dt.datetime(1970, 1, 1)
@@ -36,7 +68,10 @@ def get_price_data_yahoo(ticker) :
     
     # Load local copy
     try :
+    	# read local copy
         price_data = pd.read_csv(price_data_path, parse_dates=True, index_col=0)
+        # try to update
+        #price_data = update_price_data_yahoo(price_data_yahoo)
         #price_data.set_index('Date', inplace=True)
         # FIXME check if up to date, if not update and save
     except :
