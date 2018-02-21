@@ -47,8 +47,9 @@ def update_price_data_yahoo(price_data, ticker) :
 	    updated_data = web.DataReader(ticker, 'yahoo', req_start_date, req_end_date)
 	    actual_end_date = get_df_end_date(updated_data)
 
-	    # just return original price_data if acupdate needed
+	    # just return original price_data if no update needed
 	    if (actual_end_date <= price_data_end_date) :
+	    	print(f'No updates to {ticker} found from yahoo.')
 	    	return price_data
 	    else :
         	updated_data = price_data.append(updated_data)
@@ -87,40 +88,75 @@ def add_sma_column(data_frame, col_name, num_days) :
     data_frame[f'{col_name} SMA{num_days}'] = data_frame[col_name].rolling(window=num_days).mean()
 
 
-def add_sma_info(data_frame, col_name) :
-    """Calculate several Simple Moving Averages (SMAs) of col_name in a data_frame and add the SMA values to the data_frame"""
-    sma_days = [5, 10, 20, 50, 100, 200]
-    for d in sma_days :
-        add_sma_column(data_frame, col_name, d)
+def get_pct_diff(a, b) :
+	"""Calcuate the percent difference between a and b. %diff = 100*(a-b)/b."""
+	return 100*(a - b)/b
 
 
-def get_google_trends(data_frame, search):
+def add_sma_pct_diff_column(data_frame, col_name, sma_period) :
+	"""Calculate the percent difference between col_name and the Simple Moving Avg of col_name."""
+	sma = data_frame[col_name].rolling(window=sma_period).mean()
+	data_frame[f'pct diff {col_name} SMA{sma_period}'] = get_pct_diff(data_frame[col_name], sma)
+
+
+def get_sma_pct_diff_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
+	"""Return a dataframe containing col_name from data_frame and several columns of percent 
+	difference between col_name and the Simple Moving Averages (SMAs) for various periods.
+	"""
+	sma_pct_diff_df = pd.DataFrame(data_frame[col_name])
+	for d in sma_periods_list :
+		add_sma_pct_diff_column(sma_pct_diff_df, col_name, d)
+
+	return sma_pct_diff_df
+
+
+def get_sma_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
+    """Return a dataframe containing col_name from data_frame and several columns of Simple
+    Moving Averages (SMAs) for various periods
+    """
+    sma_df = pd.DataFrame(data_frame[col_name])
+    for d in sma_periods_list :
+        add_sma_column(sma_df, col_name, d)
+
+    return sma_df
+
+
+def get_google_trends_sma_pct_diff_df(data_frame, search, sma_periods_list=[3,5,10,20,50,100,200]) :
+	"""Get a dataframe containing the percent difference of google search trends with respect
+	to Simple Moving Averages of trend data of various periods."""
+	trend = get_google_trends_df(data_frame, search)
+	trend = get_sma_pct_diff_df(trend, search, sma_periods_list)
+	del trend[search]
+	return trend
+
+
+def get_google_trends_df(data_frame, search):
+    """Get a dataframe with google trends for a search.""" 
+    # create data_range
+    date_range = [f'{get_df_start_date(data_frame)} {get_df_end_date(data_frame)}']
+    
+    # Set up the trend fetching object
+    pytrends = TrendReq(hl='en-US', tz=360)
+    kw_list = [search]
+
+    try:
+        # Create the search object
+        pytrends.build_payload(kw_list, cat=0, timeframe=date_range[0], geo='', gprop='news')
         
-        # create data_range
-        date_range = [f'{get_df_start_date(data_frame)} {get_df_end_date(data_frame)}']
-        
-        # Set up the trend fetching object
-        pytrends = TrendReq(hl='en-US', tz=360)
-        kw_list = [search]
+        # Retrieve the interest over time
+        trends = pytrends.interest_over_time()
 
-        try:
-        
-            # Create the search object
-            pytrends.build_payload(kw_list, cat=0, timeframe=date_range[0], geo='', gprop='news')
-            
-            # Retrieve the interest over time
-            trends = pytrends.interest_over_time()
+        #related_queries = pytrends.related_queries()
 
-            related_queries = pytrends.related_queries()
+    except Exception as e:
+        print('\nGoogle Search Trend retrieval failed.')
+        print(e)
+        return
 
-        except Exception as e:
-            print('\nGoogle Search Trend retrieval failed.')
-            print(e)
-            return
-
-        # Upsample the data for joining with training data
-        trends = trends.resample('D').mean()
-        trends = trends.interpolate(method='linear')
-        #trends = trends.reset_index(level=0)
-        
-        return trends, related_queries
+    # Upsample the data for joining with training data
+    # FIXME: add another column with 'Days since update' and DO NOT interpolate
+    trends = trends.resample('D').mean()
+    trends = trends.interpolate(method='linear')
+    #trends = trends.reset_index(level=0)
+    
+    return trends#, related_queries
