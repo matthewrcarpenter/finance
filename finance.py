@@ -1,4 +1,5 @@
 """Financial utility functions."""
+import numpy as np
 import pandas as pd
 import datetime as dt
 import pandas_datareader.data as web
@@ -9,23 +10,23 @@ from pytrends.request import TrendReq
 DATA_PATH = "data"
 
 def get_df_start_date(data_frame) :
-	return min(data_frame.index).date()
+    return min(data_frame.index).date()
 
 
 def get_df_end_date(data_frame) :
-	return max(data_frame.index).date()
+    return max(data_frame.index).date()
 
 
 def get_price_data(ticker) :
-	"""Get price data for ticker. Rows with NA values will be removed from data."""
-	# Defualt to yahoo for now
-	data = get_price_data_yahoo(ticker).dropna()
-	start_date = get_df_start_date(data)
-	end_date = get_df_end_date(data)
+    """Get price data for ticker. Rows with NA values will be removed from data."""
+    # Defualt to yahoo for now
+    data = get_price_data_yahoo(ticker).dropna()
+    start_date = get_df_start_date(data)
+    end_date = get_df_end_date(data)
 
 
-	print(f'Loaded data for {ticker}: {start_date} to {end_date}.')
-	return data
+    print(f'Loaded data for {ticker}: {start_date} to {end_date}.')
+    return data
 
 def update_price_data_yahoo(price_data, ticker) :
     # try to update from next day after end of data
@@ -36,7 +37,7 @@ def update_price_data_yahoo(price_data, ticker) :
     
     # Might not need to do update
     if (req_end_date <= req_start_date) :
-    	return price_data
+        return price_data
 
     price_data_path = f'{DATA_PATH}/yahoo/{ticker}.csv'
     
@@ -44,19 +45,19 @@ def update_price_data_yahoo(price_data, ticker) :
     updated_data = price_data
     
     try :
-	    updated_data = web.DataReader(ticker, 'yahoo', req_start_date, req_end_date)
-	    actual_end_date = get_df_end_date(updated_data)
+        updated_data = web.DataReader(ticker, 'yahoo', req_start_date, req_end_date)
+        actual_end_date = get_df_end_date(updated_data)
 
-	    # just return original price_data if no update needed
-	    if (actual_end_date <= price_data_end_date) :
-	    	print(f'No updates to {ticker} found from yahoo.')
-	    	return price_data
-	    else :
-        	updated_data = price_data.append(updated_data)
-        	print(f'Updated data for {ticker} from yahoo: {req_start_date} to {actual_end_date}')
-        	updated_data.to_csv(price_data_path)
+        # just return original price_data if no update needed
+        if (actual_end_date <= price_data_end_date) :
+            print(f'No updates to {ticker} found from yahoo.')
+            return price_data
+        else :
+            updated_data = price_data.append(updated_data)
+            print(f'Updated data for {ticker} from yahoo: {req_start_date} to {actual_end_date}')
+            updated_data.to_csv(price_data_path)
     except :
-    	print(f'Could not load updates for {ticker} from yahoo. Using cached data.')
+        print(f'Could not load updates for {ticker} from yahoo. Using cached data.')
 
     return updated_data        
 
@@ -69,7 +70,7 @@ def get_price_data_yahoo(ticker) :
     
     # Load local copy
     try :
-    	# read local copy
+        # read local copy
         price_data = pd.read_csv(price_data_path, parse_dates=True, index_col=0)
         # try to update
         #price_data = update_price_data_yahoo(price_data_yahoo)
@@ -89,25 +90,25 @@ def add_sma_column(data_frame, col_name, num_days) :
 
 
 def get_pct_diff(a, b) :
-	"""Calcuate the percent difference between a and b. %diff = 100*(a-b)/b."""
-	return 100*(a - b)/b
+    """Calcuate the percent difference between a and b. %diff = 100*(a-b)/b."""
+    return 100*(a - b)/b
 
 
 def add_sma_pct_diff_column(data_frame, col_name, sma_period) :
-	"""Calculate the percent difference between col_name and the Simple Moving Avg of col_name."""
-	sma = data_frame[col_name].rolling(window=sma_period).mean()
-	data_frame[f'pct diff {col_name} SMA{sma_period}'] = get_pct_diff(data_frame[col_name], sma)
+    """Calculate the percent difference between col_name and the Simple Moving Avg of col_name."""
+    sma = data_frame[col_name].rolling(window=sma_period).mean()
+    data_frame[f'pct diff {col_name} SMA{sma_period}'] = get_pct_diff(data_frame[col_name], sma)
 
 
 def get_sma_pct_diff_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
-	"""Return a dataframe containing col_name from data_frame and several columns of percent 
-	difference between col_name and the Simple Moving Averages (SMAs) for various periods.
-	"""
-	sma_pct_diff_df = pd.DataFrame(data_frame[col_name])
-	for d in sma_periods_list :
-		add_sma_pct_diff_column(sma_pct_diff_df, col_name, d)
+    """Return a dataframe containing col_name from data_frame and several columns of percent 
+    difference between col_name and the Simple Moving Averages (SMAs) for various periods.
+    """
+    sma_pct_diff_df = pd.DataFrame(data_frame[col_name])
+    for d in sma_periods_list :
+        add_sma_pct_diff_column(sma_pct_diff_df, col_name, d)
 
-	return sma_pct_diff_df
+    return sma_pct_diff_df
 
 
 def get_sma_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
@@ -122,12 +123,30 @@ def get_sma_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50, 100, 20
 
 
 def get_google_trends_sma_pct_diff_df(data_frame, search, sma_periods_list=[3,5,10,20,50,100,200]) :
-	"""Get a dataframe containing the percent difference of google search trends with respect
-	to Simple Moving Averages of trend data of various periods."""
-	trend = get_google_trends_df(data_frame, search)
-	trend = get_sma_pct_diff_df(trend, search, sma_periods_list)
-	del trend[search]
-	return trend
+    """Get a dataframe containing the percent difference of google search trends with respect
+    to Simple Moving Averages of trend data of various periods."""
+    trend = get_google_trends_df(data_frame, search)
+    trend = get_sma_pct_diff_df(trend, search, sma_periods_list)
+    del trend[search]
+    return trend
+
+
+def add_elapsed_days(data_frame, col_name, new_name_prefix):
+    """Add a column to data_frame which gives the days elapsed since col_name last had a valid value (i.e. not NaN).
+    Newly added column will have the name 'f{new_name_prefix} {col_name}'."""
+    elapsed_df = pd.DataFrame(data_frame[col_name])
+    day_length = np.timedelta64(1, 'D')
+    last_date = np.datetime64()
+    days_elapsed = []
+
+    for v,d in zip(data_frame[col_name].values, data_frame.index.values):
+        if not np.isnan(v) :
+            last_date = d
+        days_since_nan = ((d-last_date).astype('timedelta64[D]') / day_length).astype(int)
+        days_elapsed.append(days_since_nan)
+        
+    elapsed_df[f'{new_name_prefix} {col_name}'] = days_elapsed
+    return elapsed_df
 
 
 def get_google_trends_df(data_frame, search):
@@ -145,18 +164,18 @@ def get_google_trends_df(data_frame, search):
         
         # Retrieve the interest over time
         trends = pytrends.interest_over_time()
-
-        #related_queries = pytrends.related_queries()
+        #trends = pd.DataFrame(trends_series, search)
 
     except Exception as e:
         print('\nGoogle Search Trend retrieval failed.')
         print(e)
         return
 
-    # Upsample the data for joining with training data
-    # FIXME: add another column with 'Days since update' and DO NOT interpolate
+    # Upsample the data to daily
     trends = trends.resample('D').mean()
-    trends = trends.interpolate(method='linear')
-    #trends = trends.reset_index(level=0)
+    # add column indicating how long since trend updated
+    trends = add_elapsed_days(trends, search, 'Days since updated')
+    # clean up na values from upsample
+    trends = pd.DataFrame.fillna(trends, method='ffill')
     
-    return trends#, related_queries
+    return trends
