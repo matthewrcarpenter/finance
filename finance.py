@@ -7,7 +7,76 @@ import pandas_datareader.data as web
 import pytrends
 from pytrends.request import TrendReq
 
+from fastai.structured import add_datepart
+
 DATA_PATH = "data"
+
+def create_dl_features(data_frame) :
+    """Return a DataFrame with added features useful for deep learning (dl) that aren't ticker
+    specific. For example, date parts, and days since last trading day."""
+    data = add_days_since_valid_date(data_frame, 'Days Since Trading')
+
+    # Get the days until next day of trading. Reverse sort data, call same function as above, 
+    # then resort in normal order.
+    data.sort_index(ascending=False, inplace=True)
+    data = add_days_since_valid_date(data, 'Days Until Trading')
+    data.sort_index(ascending=True, inplace=True)
+
+    # Add separate columns for various date parts (month, day, etc.)
+    data = data.reset_index()
+    add_datepart(data, 'Date', drop=False)
+    data = data.set_index('Date')
+    
+    return data
+
+
+def create_dl_ticker_features(ticker) :
+    """Return a DataFrame with ticker data plus created features useful for deep learning (dl)."""
+    data = get_price_data(ticker)
+    
+    #Get the price ranges: (High - Low), (Open - Close)
+    data['Daily Range'] = data['High'] - data['Low']
+    data['Daily Gain'] = data['Close'] - data['Open']
+    data['Close Higher than Open'] = data['Close'] > data['Open']
+    data['Close Lower than Open'] = data['Close'] < data['Open']
+
+    data['High was Open'] = abs(data['High'] - data['Open']) < 0.001
+    data['High was Close'] = abs(data['High'] - data['Close']) < 0.001
+    data['Low was Open'] = abs(data['Low'] - data['Open']) < 0.001
+    data['Low was Close'] = abs(data['Low'] - data['Close']) < 0.001
+
+    data['Closed Higher than Prev Close'] = data['Close'].diff() > 0
+    data['Closed Lower than Prev Close'] = data['Close'].diff() < 0
+
+    # SMAs of Adj Close
+    sma = get_sma_df(data, 'Adj Close')
+    del sma['Adj Close']
+    data = pd.DataFrame.join(data, sma)
+
+    sma_pct_diff = get_sma_pct_diff_df(data, 'Adj Close')
+    del sma_pct_diff['Adj Close']
+    data = pd.DataFrame.join(data, sma_pct_diff)
+
+    # SMAs of Volume
+    sma = get_sma_df(data, 'Volume')
+    del sma['Volume']
+    data = pd.DataFrame.join(data, sma)
+
+    sma_pct_diff = get_sma_pct_diff_df(data, 'Volume')
+    del sma_pct_diff['Volume']
+    data = pd.DataFrame.join(data, sma_pct_diff)
+
+    return data
+
+
+def add_prefix_to_column_names(data_frame, prefix) :
+    """Add prefix to all column names in data_frame.""" 
+    new_columns = []
+    for c in data.columns :
+        new_columns.append(f'{TICKER} {c}')
+        data.columns = new_columns
+        data.head().T
+
 
 def get_df_start_date(data_frame) :
     return min(data_frame.index).date()
@@ -73,7 +142,7 @@ def get_price_data_yahoo(ticker) :
         # read local copy
         price_data = pd.read_csv(price_data_path, parse_dates=True, index_col=0)
         # try to update
-        #price_data = update_price_data_yahoo(price_data_yahoo)
+        price_data = update_price_data_yahoo(price_data, ticker)
         #price_data.set_index('Date', inplace=True)
         # FIXME check if up to date, if not update and save
     except :
@@ -130,11 +199,36 @@ def get_google_trends_sma_pct_diff_df(data_frame, search, sma_periods_list=[3,5,
     del trend[search]
     return trend
 
+def add_days_since_valid_date(data_frame, new_col_name) :
+    """Return a new DataFrame which is a copy of data_frame with and added column called 
+    new_col_name which contains the number of days elapsed since the last valid data. 
+    The index of data_frame must be a date."""
+    assert(isinstance(data_frame, pd.DataFrame))
+    assert(isinstance(data_frame.index, pd.DatetimeIndex))
 
-def add_elapsed_days(data_frame, col_name, new_name_prefix):
-    """Add a column to data_frame which gives the days elapsed since col_name last had a valid value (i.e. not NaN).
-    Newly added column will have the name 'f{new_name_prefix} {col_name}'."""
-    elapsed_df = pd.DataFrame(data_frame[col_name])
+    elapsed_df = pd.DataFrame(data_frame)
+    day_length = np.timedelta64(1, 'D')
+    last_date = data_frame.index.values[0]
+    days_elapsed = []
+
+    for d in data_frame.index.values :
+        days_since_last = (abs(d-last_date).astype('timedelta64[D]') / day_length).astype(int)
+        days_elapsed.append(days_since_last)
+        last_date = d
+
+    elapsed_df[new_col_name] = days_elapsed
+    return elapsed_df
+
+
+def add_days_since_valid_value(data_frame, col_name, new_name_prefix):
+    """Return a new DataFrame which is a copy of data_frame with an added column which gives   
+    the days elapsed since col_name last had a valid value (i.e. not NaN).
+    Newly added column will have the name 'f{new_name_prefix} {col_name}'.
+    The index of data_frame must be a date."""
+    assert(isinstance(data_frame, pd.DataFrame))
+    assert(isinstance(data_frame.index, pd.DatetimeIndex))
+
+    elapsed_df = pd.DataFrame(data_frame)
     day_length = np.timedelta64(1, 'D')
     last_date = np.datetime64()
     days_elapsed = []
@@ -174,7 +268,7 @@ def get_google_trends_df(data_frame, search):
     # Upsample the data to daily
     trends = trends.resample('D').mean()
     # add column indicating how long since trend updated
-    trends = add_elapsed_days(trends, search, 'Days since updated')
+    trends = add_days_since_valid_value(trends, search, 'Days since updated')
     # clean up na values from upsample
     trends = pd.DataFrame.fillna(trends, method='ffill')
     
