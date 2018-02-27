@@ -11,9 +11,12 @@ from fastai.structured import add_datepart
 
 DATA_PATH = "data"
 
-def create_dl_features(data_frame) :
+def create_dl_features_df(data_frame) :
     """Return a DataFrame with added features useful for deep learning (dl) that aren't ticker
-    specific. For example, date parts, and days since last trading day."""
+    specific. For example, separate date part columns (Mon/Day/etc.), and days since last 
+    trading day."""
+    assert(isinstance(data_frame, pd.DataFrame))
+
     data = add_days_since_valid_date(data_frame, 'Days Since Trading')
 
     # Get the days until next day of trading. Reverse sort data, call same function as above, 
@@ -30,7 +33,7 @@ def create_dl_features(data_frame) :
     return data
 
 
-def create_dl_ticker_features(ticker) :
+def create_dl_ticker_features_df(ticker) :
     """Return a DataFrame with ticker data plus created features useful for deep learning (dl)."""
     data = get_price_data(ticker)
     
@@ -71,6 +74,8 @@ def create_dl_ticker_features(ticker) :
 
 def add_prefix_to_column_names(data_frame, prefix) :
     """Add prefix to all column names in data_frame.""" 
+    assert(isinstance(data_frame, pd.DataFrame))
+
     new_columns = []
     for c in data.columns :
         new_columns.append(f'{TICKER} {c}')
@@ -87,17 +92,20 @@ def get_df_end_date(data_frame) :
 
 
 def get_price_data(ticker) :
-    """Get price data for ticker. Rows with NA values will be removed from data."""
+    """Get a DataFrame with the price data for ticker. Rows with NA values will be removed from 
+    data."""
     # Defualt to yahoo for now
     data = get_price_data_yahoo(ticker).dropna()
+    
     start_date = get_df_start_date(data)
     end_date = get_df_end_date(data)
-
-
     print(f'Loaded data for {ticker}: {start_date} to {end_date}.')
+    
     return data
 
 def update_price_data_yahoo(price_data, ticker) :
+    assert(isinstance(price_data, pd.DataFrame))
+
     # try to update from next day after end of data
     price_data_end_date = get_df_end_date(price_data) 
     req_start_date =  price_data_end_date + dt.timedelta(1)
@@ -153,8 +161,17 @@ def get_price_data_yahoo(ticker) :
     return price_data
 
 
+def add_ema_column(data_frame, col_name, num_days) :
+    """Calculate the Simple Moving Average (SMA) over num_days for col_name and add to data_frame."""  
+    assert isinstance(data_frame, pd.DataFrame),"data_frame must be pandas.DataFrame object"
+ 
+    data_frame[f'{col_name} EMA{num_days}'] = data_frame[col_name].ewm(span=num_days).mean()
+
+
 def add_sma_column(data_frame, col_name, num_days) :
     """Calculate the Simple Moving Average (SMA) over num_days for col_name and add to data_frame."""  
+    assert(isinstance(data_frame, pd.DataFrame))
+
     data_frame[f'{col_name} SMA{num_days}'] = data_frame[col_name].rolling(window=num_days).mean()
 
 
@@ -165,14 +182,40 @@ def get_pct_diff(a, b) :
 
 def add_sma_pct_diff_column(data_frame, col_name, sma_period) :
     """Calculate the percent difference between col_name and the Simple Moving Avg of col_name."""
+    assert isinstance(data_frame, pd.DataFrame) ,"data_frame must be pandas.DataFrame object"
+
     sma = data_frame[col_name].rolling(window=sma_period).mean()
     data_frame[f'pct diff {col_name} SMA{sma_period}'] = get_pct_diff(data_frame[col_name], sma)
+
+
+def add_ema_pct_diff_column(data_frame, col_name, ema_period) :
+    """Calculate the percent difference between col_name and the Simple Moving Avg of col_name."""
+    assert isinstance(data_frame, pd.DataFrame) ,"data_frame must be pandas.DataFrame object"
+
+    ema = data_frame[col_name].ewm(span=ema_period).mean()
+    data_frame[f'pct diff {col_name} EMA{ema_period}'] = get_pct_diff(data_frame[col_name], ema)
+
+
+def get_ema_pct_diff_df(data_frame, col_name, ema_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
+    """Return a dataframe containing col_name from data_frame and several columns of percent 
+    difference between col_name and the Exponential Moving Averages (EMAs) for various periods.
+    """
+    assert isinstance(data_frame, pd.DataFrame) ,"data_frame must be pandas.DataFrame object"
+
+    ema_pct_diff_df = pd.DataFrame(data_frame[col_name])
+    for d in ema_periods_list :
+        add_ema_pct_diff_column(ema_pct_diff_df, col_name, d)
+
+    return ema_pct_diff_df
+
 
 
 def get_sma_pct_diff_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
     """Return a dataframe containing col_name from data_frame and several columns of percent 
     difference between col_name and the Simple Moving Averages (SMAs) for various periods.
     """
+    assert isinstance(data_frame, pd.DataFrame) ,"data_frame must be pandas.DataFrame object"
+
     sma_pct_diff_df = pd.DataFrame(data_frame[col_name])
     for d in sma_periods_list :
         add_sma_pct_diff_column(sma_pct_diff_df, col_name, d)
@@ -180,10 +223,25 @@ def get_sma_pct_diff_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50
     return sma_pct_diff_df
 
 
+def get_ema_df(data_frame, col_name, ema_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
+    """Return a dataframe containing col_name from data_frame and several columns of Exponential
+    Moving Averages (EMAs) for various periods
+    """
+    assert(isinstance(data_frame, pd.DataFrame))
+
+    ema_df = pd.DataFrame(data_frame[col_name])
+    for d in ema_periods_list :
+        add_ema_column(ema_df, col_name, d)
+
+    return ema_df
+
+
 def get_sma_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
     """Return a dataframe containing col_name from data_frame and several columns of Simple
     Moving Averages (SMAs) for various periods
     """
+    assert(isinstance(data_frame, pd.DataFrame))
+
     sma_df = pd.DataFrame(data_frame[col_name])
     for d in sma_periods_list :
         add_sma_column(sma_df, col_name, d)
@@ -191,9 +249,31 @@ def get_sma_df(data_frame, col_name, sma_periods_list=[3, 5, 10, 20, 50, 100, 20
     return sma_df
 
 
+def get_macd_df(data_frame, col_name) :
+    """Return a dataframe containing col_name for data_frame plus the MACD compnents: 
+    Fast EMA, Slow EMA, MACD, Signal, Histogram."""
+    assert(isinstance(data_frame, pd.DataFrame))
+
+    FAST = 'Fast EMA'
+    SLOW = 'Slow EMA'
+    MACD = 'MACD'
+    SIGNAL = 'Signal'
+    HIST = 'Histogram'
+
+    macd_df = pd.DataFrame(data_frame[col_name])
+    macd_df[FAST] = macd_df[col_name].ewm(span=12).mean()
+    macd_df[SLOW] = macd_df[col_name].ewm(span=26).mean()
+    macd_df[MACD] = macd_df[FAST] - macd_df[SLOW]
+    macd_df[SIGNAL] = macd_df[MACD].ewm(span=9).mean()
+    macd_df[HIST] = macd_df[MACD] - macd_df[SIGNAL]
+
+    return macd_df
+
+
 def get_google_trends_sma_pct_diff_df(data_frame, search, sma_periods_list=[3,5,10,20,50,100,200]) :
     """Get a dataframe containing the percent difference of google search trends with respect
     to Simple Moving Averages of trend data of various periods."""
+    assert(isinstance(data_frame, pd.DataFrame))
     trend = get_google_trends_df(data_frame, search)
     trend = get_sma_pct_diff_df(trend, search, sma_periods_list)
     del trend[search]
@@ -234,10 +314,10 @@ def add_days_since_valid_value(data_frame, col_name, new_name_prefix):
     days_elapsed = []
 
     for v,d in zip(data_frame[col_name].values, data_frame.index.values):
-        if not np.isnan(v) :
+        if not pd.isnan(v) :
             last_date = d
-        days_since_nan = ((d-last_date).astype('timedelta64[D]') / day_length).astype(int)
-        days_elapsed.append(days_since_nan)
+        days_since_valid = ((d-last_date).astype('timedelta64[D]') / day_length).astype(int)
+        days_elapsed.append(days_since_valid)
         
     elapsed_df[f'{new_name_prefix} {col_name}'] = days_elapsed
     return elapsed_df
