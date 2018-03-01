@@ -77,10 +77,10 @@ def add_prefix_to_column_names(data_frame, prefix) :
     assert(isinstance(data_frame, pd.DataFrame))
 
     new_columns = []
-    for c in data.columns :
-        new_columns.append(f'{TICKER} {c}')
-        data.columns = new_columns
-        data.head().T
+    for c in data_frame.columns :
+        new_columns.append(f'{prefix} {c}')
+        data_frame.columns = new_columns
+        data_frame.head().T
 
 
 def get_df_start_date(data_frame) :
@@ -314,7 +314,7 @@ def add_days_since_valid_value(data_frame, col_name, new_name_prefix):
     days_elapsed = []
 
     for v,d in zip(data_frame[col_name].values, data_frame.index.values):
-        if not pd.isnan(v) :
+        if not pd.isna(v) :
             last_date = d
         days_since_valid = ((d-last_date).astype('timedelta64[D]') / day_length).astype(int)
         days_elapsed.append(days_since_valid)
@@ -353,3 +353,54 @@ def get_google_trends_df(data_frame, search):
     trends = pd.DataFrame.fillna(trends, method='ffill')
     
     return trends
+
+
+def get_fitted_line_df(data_frame, col_name, fitted_col_name) :
+    '''Return a DataFrame with a column called fitted_col_name which contains a best fit line 
+    (using least squares) for col_name in data_frame. Any NA values in col_name will be filled 
+    in with predicted values in fitted_col_name.'''
+    assert isinstance(data_frame, pd.DataFrame)
+    assert isinstance(data_frame.index, pd.DatetimeIndex)
+    assert (col_name is not None)
+    assert (fitted_col_name is not None)
+    
+    df = pd.DataFrame(data_frame[col_name])
+    
+    # resample to daily to get even spacing -- this introduces NA values, but drop them later after 
+    # getting a nice index for fitting
+    df = df.resample('D').mean()
+
+    # reset index twice to get an 'index' column, which is nicely numbered for use in fitting -- dates don't work so well 
+    df = df.reset_index().reset_index()
+
+    # reset index to Date
+    df = df.set_index('Date')
+    
+    # Now that we have an evenly spaced and nicely numbered index, make a working copy and drop NAs
+    fit_df = df.dropna()
+
+    # ... and get x and y values for fitting
+    x = fit_df['index'].astype('float')
+    y = fit_df[col_name]
+    
+    # Fit the values, and get the prediction function
+    model = np.polyfit(x, y, deg=1)
+    predict = np.poly1d(model)
+    
+    # get predicted values for original data_frame
+    fit_vals = predict(df['index'])
+    df[fitted_col_name] = fit_vals
+    
+    #return_df = pd.DataFrame(data_frame[col_name])
+    #return_df = return_df.join(df, how='left')
+    
+    # delete the index values and the original data
+    del df['index']
+    del df[col_name]
+    
+    # now we'll join back to the original data_frame to eliminate the extra data added by the resampling
+    df2 = pd.DataFrame(data_frame[col_name])
+    df = df2.join(df, how='inner')
+    del df[col_name]
+        
+    return df
