@@ -222,9 +222,9 @@ def add_sma_column(data_frame, col_name, num_days) :
         data_frame[col_name].rolling(window=num_days).mean()
 
 
-def get_pct_diff(a, b) :
-    """Calcuate the percent difference between a and b. %diff = 100*(a-b)/b."""
-    return 100*(a - b)/b
+def get_pct_diff(measured, expected) :
+    """Calcuate the percent difference between measured and expected values."""
+    return 100*(measured - expected)/expected
 
 
 def add_sma_pct_diff_column(data_frame, col_name, sma_period) :
