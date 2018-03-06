@@ -77,10 +77,10 @@ def add_prefix_to_column_names(data_frame, prefix) :
     assert(isinstance(data_frame, pd.DataFrame))
 
     new_columns = []
-    for c in data.columns :
-        new_columns.append(f'{TICKER} {c}')
-        data.columns = new_columns
-        data.head().T
+    for c in data_frame.columns :
+        new_columns.append(f'{prefix} {c}')
+        data_frame.columns = new_columns
+        data_frame.head().T
 
 
 def get_df_start_date(data_frame) :
@@ -281,7 +281,7 @@ def get_google_trends_sma_pct_diff_df(data_frame, search, sma_periods_list=[3,5,
 
 def add_days_since_valid_date(data_frame, new_col_name) :
     """Return a new DataFrame which is a copy of data_frame with and added column called 
-    new_col_name which contains the number of days elapsed since the last valid data. 
+    new_col_name which contains the number of days elapsed since the last valid date. 
     The index of data_frame must be a date."""
     assert(isinstance(data_frame, pd.DataFrame))
     assert(isinstance(data_frame.index, pd.DatetimeIndex))
@@ -314,7 +314,7 @@ def add_days_since_valid_value(data_frame, col_name, new_name_prefix):
     days_elapsed = []
 
     for v,d in zip(data_frame[col_name].values, data_frame.index.values):
-        if not pd.isnan(v) :
+        if not pd.isna(v) :
             last_date = d
         days_since_valid = ((d-last_date).astype('timedelta64[D]') / day_length).astype(int)
         days_elapsed.append(days_since_valid)
