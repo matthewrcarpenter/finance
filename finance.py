@@ -281,7 +281,7 @@ def get_google_trends_sma_pct_diff_df(data_frame, search, sma_periods_list=[3,5,
 
 def add_days_since_valid_date(data_frame, new_col_name) :
     """Return a new DataFrame which is a copy of data_frame with and added column called 
-    new_col_name which contains the number of days elapsed since the last valid data. 
+    new_col_name which contains the number of days elapsed since the last valid date. 
     The index of data_frame must be a date."""
     assert(isinstance(data_frame, pd.DataFrame))
     assert(isinstance(data_frame.index, pd.DatetimeIndex))
