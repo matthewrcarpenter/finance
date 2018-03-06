@@ -27,7 +27,8 @@ def create_ml_features_df(data_frame) :
     Returns:
         A new DataFrame with features added to data_frame. 
     """
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     data = create_days_since_valid_date(data_frame, 'Days Since Trading')
 
@@ -94,8 +95,8 @@ def create_ml_ticker_features_df(ticker) :
 
 def add_prefix_to_column_names(data_frame, prefix) :
     """Add prefix to all column names in data_frame.""" 
-    #assert isinstance(data_frame, pd.DataFrame),
-    #    "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     new_columns = []
     for c in data_frame.columns :
@@ -105,22 +106,22 @@ def add_prefix_to_column_names(data_frame, prefix) :
 
 
 def get_df_start_date(data_frame) :
-#    assert (isinstance(data_frame, pd.DataFrame)),
-#        "data_frame must be pandas.DataFrame object"
+    assert (isinstance(data_frame, pd.DataFrame)), \
+        "data_frame must be pandas.DataFrame object"
 
     return min(data_frame.index).date()
 
 
 def get_df_end_date(data_frame) :
-#    assert isinstance(data_frame, pd.DataFrame),
-#        "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     return max(data_frame.index).date()
 
 
 def create_price_data(ticker) :
-    """Get a DataFrame with the price data for ticker. Rows with NA values will be removed from 
-    data."""
+    """Get a DataFrame with the price data for ticker. Rows with NA values will 
+    be removed from data."""
     # Defualt to yahoo for now
     data = create_price_data_yahoo(ticker).dropna()
     
@@ -133,8 +134,8 @@ def create_price_data(ticker) :
 def update_price_data_yahoo(price_data, ticker) :
     """Updates price data to include most recent data available from Yahoo.
     """
-#    assert isinstance(data_frame, pd.DataFrame),
-#        "data_frame must be pandas.DataFrame object"
+    assert isinstance(price_data, pd.DataFrame), \
+        "price_data must be pandas.DataFrame object"
 
     # try to update from next day after end of data
     price_data_end_date = get_df_end_date(price_data) 
@@ -162,10 +163,12 @@ def update_price_data_yahoo(price_data, ticker) :
             return price_data
         else :
             updated_data = price_data.append(updated_data)
-            print(f'Updated data for {ticker} from yahoo: {req_start_date} to {actual_end_date}')
+            print(f'Updated data for {ticker} from yahoo: '
+                f'{req_start_date} to {actual_end_date}')
             updated_data.to_csv(price_data_path)
     except :
-        print(f'Could not load updates for {ticker} from yahoo. Using cached data.')
+        print(f'Could not load updates for {ticker} from yahoo. '
+            'Using cached data.')
 
     return updated_data        
 
@@ -186,7 +189,8 @@ def create_price_data_yahoo(ticker) :
         #price_data.set_index('Date', inplace=True)
         # FIXME check if up to date, if not update and save
     except :
-        print(f'Could not read file: {price_data_path}. Downloading data for "{ticker}" from yahoo.com...')
+        print(f'Could not read file: {price_data_path}.' 
+            f'Downloading data for "{ticker}" from yahoo.com...')
         price_data = web.DataReader(ticker, 'yahoo', start, end)
         price_data.to_csv(price_data_path)
     
@@ -202,17 +206,20 @@ def add_ema_column(data_frame, col_name, num_days) :
             contain daily data.
         num_days: Number of days (span) to use for calculating EMA.
     """
-#    assert isinstance(data_frame, pd.DataFrame),
-#        "data_frame must be pandas.DataFrame object"
-# 
-    data_frame[f'{col_name} EMA{num_days}'] = data_frame[col_name].ewm(span=num_days).mean()
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+ 
+    data_frame[f'{col_name} EMA{num_days}'] = \
+        data_frame[col_name].ewm(span=num_days).mean()
 
 
 def add_sma_column(data_frame, col_name, num_days) :
     """Add a column with Simple Moving Average (SMA) data to a DataFrame."""
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
-    data_frame[f'{col_name} SMA{num_days}'] = data_frame[col_name].rolling(window=num_days).mean()
+    data_frame[f'{col_name} SMA{num_days}'] = \
+        data_frame[col_name].rolling(window=num_days).mean()
 
 
 def get_pct_diff(a, b) :
@@ -223,19 +230,23 @@ def get_pct_diff(a, b) :
 def add_sma_pct_diff_column(data_frame, col_name, sma_period) :
     """Add a column with the percent difference between data and the Simple 
     Moving Average of that data."""
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     sma = data_frame[col_name].rolling(window=sma_period).mean()
-    data_frame[f'pct diff {col_name} SMA{sma_period}'] = get_pct_diff(data_frame[col_name], sma)
+    data_frame[f'pct diff {col_name} SMA{sma_period}'] = \
+        get_pct_diff(data_frame[col_name], sma)
 
 
 def add_ema_pct_diff_column(data_frame, col_name, ema_period) :
     """Add a column with the percent difference between base values and the 
     Exponential Moving Average of those values."""
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     ema = data_frame[col_name].ewm(span=ema_period).mean()
-    data_frame[f'pct diff {col_name} EMA{ema_period}'] = get_pct_diff(data_frame[col_name], ema)
+    data_frame[f'pct diff {col_name} EMA{ema_period}'] = \
+        get_pct_diff(data_frame[col_name], ema)
 
 
 def create_ema_pct_diff_df(data_frame, col_name, 
@@ -244,7 +255,8 @@ def create_ema_pct_diff_df(data_frame, col_name,
     difference between those values and the Exponential Moving Averages (EMAs) 
     of those values for various periods.
     """
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     ema_pct_diff_df = pd.DataFrame(data_frame[col_name])
     for d in ema_periods_list :
@@ -260,7 +272,8 @@ def create_sma_pct_diff_df(data_frame, col_name,
     difference between those values and the Simple Moving Averages (EMAs) of 
     those values for various periods.
     """
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     sma_pct_diff_df = pd.DataFrame(data_frame[col_name])
     for d in sma_periods_list :
@@ -274,7 +287,8 @@ def create_ema_df(data_frame, col_name,
     """Create a DataFrame containing base values plus several columns of the 
     Exponential Moving Averages (EMAs) of those values for various periods.
     """
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     ema_df = pd.DataFrame(data_frame[col_name])
     for d in ema_periods_list :
@@ -288,7 +302,8 @@ def create_sma_df(data_frame, col_name,
     """Create a DataFrame containing base values plus several columns of the 
     Simple Moving Averages (EMAs) of those values for various periods.
     """
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     sma_df = pd.DataFrame(data_frame[col_name])
     for d in sma_periods_list :
@@ -300,7 +315,8 @@ def create_sma_df(data_frame, col_name,
 def create_macd_df(data_frame, col_name) :
     """Create a DataFrame containing base values plus the MACD components:
     Fast EMA, Slow EMA, MACD, Signal, Histogram."""
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
 
     FAST = 'Fast EMA'
     SLOW = 'Slow EMA'
@@ -323,7 +339,8 @@ def create_google_trends_sma_pct_diff_df(data_frame, search,
     """Create a DataFrame containing the percent difference of google search 
     trends with respect to Simple Moving Averages of trend data of various 
     periods."""
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
     
     trend = create_google_trends_df(data_frame, search)
     trend = create_sma_pct_diff_df(trend, search, sma_periods_list)
@@ -339,8 +356,10 @@ def create_days_since_valid_date(data_frame, new_col_name) :
         new_col_name: String with the name of the new column containg the days
             elapsed since last valid date.
     """
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
-    assert isinstance(data_frame.index, pd.DatetimeIndex), "data_frame must use a DatetimeIndex"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame.index, pd.DatetimeIndex), \
+        "data_frame must use a DatetimeIndex"
 
     elapsed_df = pd.DataFrame(data_frame)
     day_length = np.timedelta64(1, 'D')
@@ -368,8 +387,10 @@ def create_days_since_valid_value(data_frame, col_name, new_name_prefix):
             create new column. Newly added column will have the name 
             'f{new_name_prefix} {col_name}'.
     """
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
-    assert isinstance(data_frame.index, pd.DatetimeIndex), "data_frame must use a DatetimeIndex"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame.index, pd.DatetimeIndex), \
+        "data_frame must use a DatetimeIndex"
 
     elapsed_df = pd.DataFrame(data_frame)
     day_length = np.timedelta64(1, 'D')
@@ -390,7 +411,8 @@ def create_days_since_valid_value(data_frame, col_name, new_name_prefix):
 def create_google_trends_df(data_frame, search):
     """Create a DataFrame with google trends for a search.""" 
     # create data_range
-    date_range = [f'{get_df_start_date(data_frame)} {get_df_end_date(data_frame)}']
+    date_range = \
+        [f'{get_df_start_date(data_frame)} {get_df_end_date(data_frame)}']
     
     # Set up the trend fetching object
     pytrends = TrendReq(hl='en-US', tz=360)
@@ -434,8 +456,10 @@ def create_fitted_line_df(data_frame, col_name, fitted_col_name) :
         A DataFrame containing a column with the values of interest plus a 
         column with the best fit line values.
     '''
-    assert isinstance(data_frame, pd.DataFrame), "data_frame must be pandas.DataFrame object"
-    assert isinstance(data_frame.index, pd.DatetimeIndex), "data_frame must use a DatetimeIndex"
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+    assert isinstance(data_frame.index, pd.DatetimeIndex), \
+        "data_frame must use a DatetimeIndex"
     assert (col_name is not None)
     assert (fitted_col_name is not None)
     
