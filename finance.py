@@ -189,7 +189,7 @@ def create_price_data_yahoo(ticker) :
         #price_data.set_index('Date', inplace=True)
         # FIXME check if up to date, if not update and save
     except :
-        print(f'Could not read file: {price_data_path}.' 
+        print(f'Could not read file: {price_data_path}. ' 
             f'Downloading data for "{ticker}" from yahoo.com...')
         price_data = web.DataReader(ticker, 'yahoo', start, end)
         price_data.to_csv(price_data_path)
