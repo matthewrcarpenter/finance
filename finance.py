@@ -63,7 +63,7 @@ def create_ml_ticker_features_df(ticker) :
     Returns:
         A new DataFrame with features added to data_frame.     
     """
-    data = create_price_data(ticker)
+    data = get_price_data(ticker)
     
     #Get the price ranges: (High - Low), (Open - Close)
     data['Daily Range'] = data['High'] - data['Low']
@@ -138,6 +138,7 @@ def get_price_data(ticker) :
     
     return data
 
+
 def update_price_data_yahoo(price_data, ticker) :
     """Updates price data to include most recent data available from Yahoo.
     """
@@ -179,6 +180,7 @@ def update_price_data_yahoo(price_data, ticker) :
 
     return updated_data        
 
+
 def get_price_data_yahoo(ticker) :
     """Get raw ticker price data from yahoo. No data cleaning is performed on 
     data."""
@@ -193,8 +195,6 @@ def get_price_data_yahoo(ticker) :
         price_data = pd.read_csv(price_data_path, parse_dates=True, index_col=0)
         # try to update
         price_data = update_price_data_yahoo(price_data, ticker)
-        #price_data.set_index('Date', inplace=True)
-        # FIXME check if up to date, if not update and save
     except :
         print(f'Could not read file: {price_data_path}. ' 
             f'Downloading data for "{ticker}" from yahoo.com...')
@@ -204,29 +204,160 @@ def get_price_data_yahoo(ticker) :
     return price_data
 
 
-def add_ema_column(data_frame, col_name, num_days) :
+def use_data_frame_if_inplace(data_frame, inplace) :
+    """Convenience methode that returns data_frame if inplace==True, else 
+    returns a copy of data_frame."""
+    if inplace :
+        return data_frame
+    else :
+        return data_frame.copy()
+
+
+def add_ema_column(data_frame, column, num_days, inplace=False) :
     """Add a column with Exponential Moving Average (EMA) data to a DataFrame.
 
     Args:
         data_frame: DataFrame containing data of interest.
-        col_name: String containing column of interest. Column is assumed to 
+        column: String containing column of interest. Column is assumed to 
             contain daily data.
         num_days: Number of days (span) to use for calculating EMA.
     """
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
  
-    data_frame[f'{col_name} EMA{num_days}'] = \
-        data_frame[col_name].ewm(span=num_days).mean()
+    df = use_data_frame_if_inplace(data_frame, inplace)
+
+    df[f'{column} EMA{num_days}'] = df[column].ewm(span=num_days).mean()
+    return df
 
 
-def add_sma_column(data_frame, col_name, num_days) :
+def add_ema_columns(data_frame, column, ema_periods_list=[12, 26], 
+    inplace=False) :
+    """Add several columns to a DataFrame containing the Exponential Moving 
+    Averages (EMAs) of those values for various periods.
+    """
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+
+    df = use_data_frame_if_inplace(data_frame, inplace)
+    for d in ema_periods_list :
+        add_ema_column(df, column, d, inplace=True)
+    return df
+
+
+def add_ema_pct_diff_column(data_frame, column, ema_period, inplace=False) :
+    """Add a column with the percent difference between base values and the 
+    Exponential Moving Average of those values."""
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+
+    df = use_data_frame_if_inplace(data_frame, inplace)
+
+    ema = df[column].ewm(span=ema_period).mean()
+    df[f'pct diff {column} EMA{ema_period}'] = get_pct_diff(df[column], ema)
+
+    return df
+
+
+def add_ema_pct_diff_columns(data_frame, column, ema_period, 
+        ema_periods_list=[12,26], inplace=False) :
+    """Add columns with the percent difference between base values and the 
+    Exponential Moving Average of those values."""
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+
+    df = use_data_frame_if_inplace(data_frame, inplace)
+    for d in ema_periods_list :
+        add_ema_pct_diff_column(df, column, d, inplace=True)
+
+    return df
+
+
+def add_macd_columns(data_frame, column, inplace=False) :
+    """Add MACD (Moving Average Convergence/Divergence) columns to a DataFrame.
+    
+    Args:
+        data_frame: DataFrame of interest.
+        column: String containing the column name with the data of interest.
+        inplace: Boolean indicating whether to modify data_frame inplace.
+
+    Returns:
+        DataFrame with added columns for: 'EMA12', 'EMA26', 'MACD', 
+        'MACD EMA9', 'MACD Hist'. All of the listed columns will be prepended 
+        with the column argument (e.g., f'{column} EMA12'). 
+    """
+    fast = 12
+    slow = 26
+
+    FAST = f'{column} EMA{fast}'
+    SLOW = f'{column} EMA{slow}'
+    MACD = f'{column} MACD'
+    SIGNAL = f'{column} MACD EMA9'
+    HIST = f'{column} MACD Hist'
+
+    df = use_data_frame_if_inplace(data_frame, inplace)
+    
+    df[FAST] = df[column].ewm(span=12).mean()
+    df[SLOW] = df[column].ewm(span=26).mean()
+    df[MACD] = df[FAST] - df[SLOW]
+    df[SIGNAL] = df[MACD].ewm(span=9).mean()
+    df[HIST] = df[MACD] - df[SIGNAL]
+
+    return df    
+
+
+def add_sma_column(data_frame, column, num_days, inplace=False) :
     """Add a column with Simple Moving Average (SMA) data to a DataFrame."""
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
 
-    data_frame[f'{col_name} SMA{num_days}'] = \
-        data_frame[col_name].rolling(window=num_days).mean()
+    df = use_data_frame_if_inplace(data_frame, inplace)
+
+    df[f'{column} SMA{num_days}'] = df[column].rolling(
+        window=num_days).mean()
+    
+    return df
+
+
+def add_sma_columns(data_frame, column, ema_periods_list=[12, 26], 
+    inplace=False) :
+    """Add several columns to a DataFrame containing the Simple Moving Averages 
+    (SMAs) of values in column for various periods."""
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+
+    df = use_data_frame_if_inplace(data_frame, inplace)
+    for d in sma_periods_list :
+        add_sma_column(df, column, d, inplace=True)
+    return df
+
+
+def add_sma_pct_diff_column(data_frame, column, sma_period, inplace=False) :
+    """Add a column with the percent difference between data and the Simple 
+    Moving Average of that data."""
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+
+    df = use_data_frame_if_inplace(data_frame, inplace)
+
+    sma = data_frame[column].rolling(window=sma_period).mean()
+    df[f'pct diff {column} SMA{sma_period}'] = get_pct_diff(df[column], sma)
+
+    return df
+
+
+def add_sma_pct_diff_columns(data_frame, column, sma_periods_list=[6, 12],
+        inplace=False) :
+    """Add several columns to a DataFrame containing the percent difference 
+    between those values and the Simple Moving Averages (SMAs) of those values 
+    for various periods."""
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+
+    df = use_data_frame_if_inplace(data_frame, inplace)
+    for d in sma_periods_list :
+        add_sma_pct_diff_column(df, column, d, inplace=True)
+    return df
 
 
 def get_pct_diff(measured, expected) :
@@ -234,30 +365,8 @@ def get_pct_diff(measured, expected) :
     return 100*(measured - expected)/expected
 
 
-def add_sma_pct_diff_column(data_frame, col_name, sma_period) :
-    """Add a column with the percent difference between data and the Simple 
-    Moving Average of that data."""
-    assert isinstance(data_frame, pd.DataFrame), \
-        "data_frame must be pandas.DataFrame object"
-
-    sma = data_frame[col_name].rolling(window=sma_period).mean()
-    data_frame[f'pct diff {col_name} SMA{sma_period}'] = \
-        get_pct_diff(data_frame[col_name], sma)
-
-
-def add_ema_pct_diff_column(data_frame, col_name, ema_period) :
-    """Add a column with the percent difference between base values and the 
-    Exponential Moving Average of those values."""
-    assert isinstance(data_frame, pd.DataFrame), \
-        "data_frame must be pandas.DataFrame object"
-
-    ema = data_frame[col_name].ewm(span=ema_period).mean()
-    data_frame[f'pct diff {col_name} EMA{ema_period}'] = \
-        get_pct_diff(data_frame[col_name], ema)
-
-
-def create_ema_pct_diff_df(data_frame, col_name, 
-        ema_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
+def create_ema_pct_diff_df(data_frame, column, 
+        ema_periods_list=[12, 26]) :
     """Create a DataFrame containing base values plus several columns of percent 
     difference between those values and the Exponential Moving Averages (EMAs) 
     of those values for various periods.
@@ -265,16 +374,12 @@ def create_ema_pct_diff_df(data_frame, col_name,
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
 
-    ema_pct_diff_df = pd.DataFrame(data_frame[col_name])
-    for d in ema_periods_list :
-        add_ema_pct_diff_column(ema_pct_diff_df, col_name, d)
-
-    return ema_pct_diff_df
+    df = pd.DataFrame(data_frame[column])
+    return add_ema_pct_diff_columns(df, column, ema_periods_list, inplace=True)
 
 
-
-def create_sma_pct_diff_df(data_frame, col_name, 
-        sma_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
+def create_sma_pct_diff_df(data_frame, column, 
+        sma_periods_list=[6, 12]) :
     """Create a DataFrame containing base values plus several columns of percent 
     difference between those values and the Simple Moving Averages (EMAs) of 
     those values for various periods.
@@ -282,64 +387,51 @@ def create_sma_pct_diff_df(data_frame, col_name,
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
 
-    sma_pct_diff_df = pd.DataFrame(data_frame[col_name])
-    for d in sma_periods_list :
-        add_sma_pct_diff_column(sma_pct_diff_df, col_name, d)
-
-    return sma_pct_diff_df
+    df = pd.DataFrame(data_frame[column])
+    return df.add_sma_pct_diff_columns(df, column, sma_periods_list, 
+        inplace=True)
 
 
-def create_ema_df(data_frame, col_name, 
-        ema_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
+def create_ema_df(data_frame, column, ema_periods_list=[12, 26]) :
     """Create a DataFrame containing base values plus several columns of the 
     Exponential Moving Averages (EMAs) of those values for various periods.
     """
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
 
-    ema_df = pd.DataFrame(data_frame[col_name])
-    for d in ema_periods_list :
-        add_ema_column(ema_df, col_name, d)
-
-    return ema_df
+    df = pd.DataFrame(data_frame[column])
+    return add_ema_columns(df, column, ema_periods_list, inplace=True)
 
 
-def create_sma_df(data_frame, col_name,
-        sma_periods_list=[3, 5, 10, 20, 50, 100, 200]) :
+def create_sma_df(data_frame, column, sma_periods_list=[6, 12]) :
     """Create a DataFrame containing base values plus several columns of the 
-    Simple Moving Averages (EMAs) of those values for various periods.
+    Simple Moving Averages (SMAs) of those values for various periods.
     """
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
 
-    sma_df = pd.DataFrame(data_frame[col_name])
-    for d in sma_periods_list :
-        add_sma_column(sma_df, col_name, d)
+    df = pd.DataFrame(data_frame[column])
+    return add_sma_columns(df, column, sma_periods_list, inplace=True)
+    
 
-    return sma_df
-
-
-def create_macd_df(data_frame, col_name) :
-    """Create a DataFrame containing base values plus the MACD components:
-    Fast EMA, Slow EMA, MACD, Signal, Histogram."""
+def create_macd_df(data_frame, column) :
+    """Create a new DataFrame containing base values for column, plus MACD 
+    (Moving Average Convergence/Divergence) columns.
+    
+    Args:
+        data_frame: DataFrame of interest.
+        column: String containing the column name with the data of interest.
+ 
+    Returns:
+        DataFrame with column plus added columns for: 'EMA12', 'EMA26', 'MACD', 
+        'MACD EMA9', 'MACD Hist'. All of the listed columns will be prepended 
+        with the column argument (e.g., f'{column} EMA12'). 
+    """
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
-
-    FAST = 'Fast EMA'
-    SLOW = 'Slow EMA'
-    MACD = 'MACD'
-    SIGNAL = 'Signal'
-    HIST = 'Histogram'
-
-    macd_df = pd.DataFrame(data_frame[col_name])
-    macd_df[FAST] = macd_df[col_name].ewm(span=12).mean()
-    macd_df[SLOW] = macd_df[col_name].ewm(span=26).mean()
-    macd_df[MACD] = macd_df[FAST] - macd_df[SLOW]
-    macd_df[SIGNAL] = macd_df[MACD].ewm(span=9).mean()
-    macd_df[HIST] = macd_df[MACD] - macd_df[SIGNAL]
-
-    return macd_df
-
+    df = pd.DataFrame(data_frame[column])
+    return add_macd_columns(df, column, inplace=True)
+    
 
 def create_google_trends_sma_pct_diff_df(data_frame, search, 
         sma_periods_list=[3,5,10,20,50,100,200]) :
@@ -354,13 +446,14 @@ def create_google_trends_sma_pct_diff_df(data_frame, search,
     del trend[search]
     return trend
 
-def create_days_since_valid_date(data_frame, new_col_name) :
+
+def create_days_since_valid_date(data_frame, new_column) :
     """Copy a DataFrame and add a column containing the number of days elapsed
     since the last valid date. 
     
     Args:
         data_frame: DataFrame with a DatetimeIndex.
-        new_col_name: String with the name of the new column containg the days
+        new_column: String with the name of the new column containg the days
             elapsed since last valid date.
     """
     assert isinstance(data_frame, pd.DataFrame), \
@@ -379,20 +472,20 @@ def create_days_since_valid_date(data_frame, new_col_name) :
         days_elapsed.append(days_since_last)
         last_date = d
 
-    elapsed_df[new_col_name] = days_elapsed
+    elapsed_df[new_column] = days_elapsed
     return elapsed_df
 
 
-def create_days_since_valid_value(data_frame, col_name, new_name_prefix):
+def create_days_since_valid_value(data_frame, column, new_name_prefix):
     """Copy a DataFrame and add a column which gives the days elapsed since the
     column of interest had a valid value.
 
     Args:
         data_frame: DataFrame of interest, must have DatetimeIndex.
-        col_name: String with name of column of interest in data_frame.
-        new_name_prefix: String with a prefix that will be added to col_name to 
+        column: String with name of column of interest in data_frame.
+        new_name_prefix: String with a prefix that will be added to column to 
             create new column. Newly added column will have the name 
-            'f{new_name_prefix} {col_name}'.
+            'f{new_name_prefix} {column}'.
     """
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
@@ -404,18 +497,18 @@ def create_days_since_valid_value(data_frame, col_name, new_name_prefix):
     last_date = np.datetime64()
     days_elapsed = []
 
-    for v,d in zip(data_frame[col_name].values, data_frame.index.values):
+    for v,d in zip(data_frame[column].values, data_frame.index.values):
         if not pd.isna(v) :
             last_date = d
         days_since_valid = ((d-last_date).astype('timedelta64[D]') /
             day_length).astype(int)
         days_elapsed.append(days_since_valid)
         
-    elapsed_df[f'{new_name_prefix} {col_name}'] = days_elapsed
+    elapsed_df[f'{new_name_prefix} {column}'] = days_elapsed
     return elapsed_df
 
 
-def create_google_trends_df(data_frame, search):
+def get_google_trends_df(data_frame, search):
     """Create a DataFrame with google trends for a search.""" 
     # create data_range
     date_range = \
@@ -449,15 +542,15 @@ def create_google_trends_df(data_frame, search):
     return trends
 
 
-def create_fitted_line_df(data_frame, col_name, fitted_col_name) :
+def create_fitted_line_df(data_frame, column, fitted_column) :
     '''Create a DataFrame with base values of interest plus a column with a best
     fit line for those values.
 
     Args:
         data_frame: DataFrame of interest, must use a DatetimeIndex.
-        col_name: String with name of the column of interest. Any NA values in
-            col_name will be filled in with predicted values in fitted_col_name.
-        fitted_col_name: String with the name of the new column that contains 
+        column: String with name of the column of interest. Any NA values in
+            column will be filled in with predicted values in fitted_column.
+        fitted_column: String with the name of the new column that contains 
             the best fit line values. 
     Returns:
         A DataFrame containing a column with the values of interest plus a 
@@ -467,10 +560,10 @@ def create_fitted_line_df(data_frame, col_name, fitted_col_name) :
         "data_frame must be pandas.DataFrame object"
     assert isinstance(data_frame.index, pd.DatetimeIndex), \
         "data_frame must use a DatetimeIndex"
-    assert (col_name is not None)
-    assert (fitted_col_name is not None)
+    assert (column is not None)
+    assert (fitted_column is not None)
     
-    df = pd.DataFrame(data_frame[col_name])
+    df = pd.DataFrame(data_frame[column])
     
     # resample to daily to get even spacing -- this introduces NA values, but 
     # drop them later after getting a nice index for fitting
@@ -489,7 +582,7 @@ def create_fitted_line_df(data_frame, col_name, fitted_col_name) :
 
     # ... and get x and y values for fitting
     x = fit_df['index'].astype('float')
-    y = fit_df[col_name]
+    y = fit_df[column]
     
     # Fit the values, and get the prediction function
     model = np.polyfit(x, y, deg=1)
@@ -497,20 +590,20 @@ def create_fitted_line_df(data_frame, col_name, fitted_col_name) :
     
     # get predicted values for original data_frame
     fit_vals = predict(df['index'])
-    df[fitted_col_name] = fit_vals
+    df[fitted_column] = fit_vals
     
-    #return_df = pd.DataFrame(data_frame[col_name])
+    #return_df = pd.DataFrame(data_frame[column])
     #return_df = return_df.join(df, how='left')
     
     # delete the index values and the original data
     del df['index']
-    del df[col_name]
+    del df[column]
     
     # now we'll join back to the original data_frame to eliminate the extra 
     # data added by the resampling
-    df2 = pd.DataFrame(data_frame[col_name])
+    df2 = pd.DataFrame(data_frame[column])
     df = df2.join(df, how='inner')
-    del df[col_name]
+    del df[column]
         
     return df
 
