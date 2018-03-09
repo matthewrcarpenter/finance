@@ -4,6 +4,13 @@ import pandas as pd
 import datetime as dt
 import pandas_datareader.data as web
 
+import matplotlib.colors as colors
+import matplotlib.dates as mdates
+import matplotlib.ticker as mticker
+import matplotlib.mlab as mlab
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as font_manager
+
 import pytrends
 from pytrends.request import TrendReq
 
@@ -119,11 +126,11 @@ def get_df_end_date(data_frame) :
     return max(data_frame.index).date()
 
 
-def create_price_data(ticker) :
+def get_price_data(ticker) :
     """Get a DataFrame with the price data for ticker. Rows with NA values will 
     be removed from data."""
     # Defualt to yahoo for now
-    data = create_price_data_yahoo(ticker).dropna()
+    data = get_price_data_yahoo(ticker).dropna()
     
     start_date = get_df_start_date(data)
     end_date = get_df_end_date(data)
@@ -172,7 +179,7 @@ def update_price_data_yahoo(price_data, ticker) :
 
     return updated_data        
 
-def create_price_data_yahoo(ticker) :
+def get_price_data_yahoo(ticker) :
     """Get raw ticker price data from yahoo. No data cleaning is performed on 
     data."""
     start = dt.datetime(1970, 1, 1)
@@ -506,3 +513,255 @@ def create_fitted_line_df(data_frame, col_name, fitted_col_name) :
     del df[col_name]
         
     return df
+
+
+def plot_daily_ticker(ohlcv_df, title=None, macd_df=None, rsi_df=None, overlays_df=None) :
+    """Plots a daily candlestick chart for ticker OHLCV data.
+
+    This code is based on 
+    https://matplotlib.org/1.5.1/examples/pylab_examples/finance_work2.html
+    
+    Args:
+        ohlcv_df: DataFrame containing OHLCV data. Must contain date index and 
+            columns name 'Open', 'High', 'Low', 'Close', and 'Volume'.
+        macd_df: DataFrame containing the MACD columns associated with ohlcv_df.
+        rsi_df: DataFrame containing the RSI column associated with ohlcv_df
+        overlays_df: DataFrame containing other columns to overlay onto the 
+        OHLC plot. All columns in overlays_df will be plotted. 
+    """
+    assert isinstance(ohlcv_df, pd.DataFrame), \
+        "ohlcv_df must be pandas.DataFrame object"
+    
+    # Get start and end dates for date axis, pad for plotting
+    start_date = ohlcv_df.index[0] - dt.timedelta(0.5)
+    end_date = ohlcv_df.index[-1] + dt.timedelta(0.5)
+    label_axis = None
+    no_label_axes = []
+    
+    plt.rc('axes', grid=True)
+    plt.rc('grid', color='0.75', linestyle='-', linewidth=0.5)
+
+    fig = plt.figure(facecolor='white')
+    axescolor = '#f6f6f6'  # the axes background color
+    textsize = 9
+    left, width = 0.1, 0.8
+  
+    rect_rsi = [left, 0.7, width, 0.1]
+    rect_ohlcv = [left, 0.1, width, 0.6]
+    rect_macd = [left, 0.0, width, 0.1]
+
+    ax_rsi = None
+    
+    if title is None :
+        title=''
+
+    # RSI
+    if rsi_df is not None :
+        ax_rsi = fig.add_axes(rect_rsi, 
+            facecolor=axescolor)  # left, bottom, width, height
+        rsi = rsi_df[start_date:end_date]
+        format_rsi_axis(ax_rsi, rsi)
+        no_label_axes.append(ax_rsi)
+        ax_rsi.set_title(f'{title}')
+
+    # OHLC
+    ax_ohlc = fig.add_axes(rect_ohlcv, facecolor=axescolor, sharex=ax_rsi)
+    if overlays_df is not None:
+        overlays = overlays_df[start_date:end_date]
+    else :
+        overlays = None
+    format_ohlc_axis(ax_ohlc, ohlcv_df, overlays)
+    if rsi_df is None :
+        ax_ohlc.set_title(f'{title}')
+
+    # Volume
+    ax_vol = ax_ohlc.twinx()
+    format_volume_axis(ax_vol, ohlcv_df)
+    no_label_axes.append(ax_vol)
+
+    # ... summary string 
+    s = get_plot_ohlcv_summary_str(ohlcv_df)
+    ax_ohlc.text(0.3, 0.95, s, transform=ax_ohlc.transAxes, 
+        fontsize=textsize+1)
+
+    # ... legend
+    props = font_manager.FontProperties(size=10)
+    leg = ax_ohlc.legend(loc='best', prop=props) #, shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    # MACD
+    ax_macd = None
+    if macd_df is not None :
+        ax_macd = fig.add_axes(rect_macd, facecolor=axescolor, sharex=ax_ohlc)
+        macd = macd_df[start_date:end_date]
+        format_macd_axis(ax_macd, macd)
+        no_label_axes.append(ax_ohlc)
+        label_axis = ax_macd
+    else :
+        label_axis = ax_ohlc
+    
+    # turn off upper axis tick labels
+    for ax in no_label_axes :
+        for label in ax.get_xticklabels():
+            label.set_visible(False)
+
+    # rotate the lower ones, etc
+    for label in label_axis.get_xticklabels():
+        label.set_rotation(30)
+        label.set_horizontalalignment('right')
+    label_axis.fmt_xdata = mdates.DateFormatter('%Y-%m-%d')
+
+    # set start and end date for all axes
+    all_axes = list(no_label_axes)
+    all_axes.append(label_axis)
+    for ax in all_axes :
+        ax.set_xlim(start_date, end_date)
+    
+    class MyLocator(mticker.MaxNLocator):
+        def __init__(self, *args, **kwargs):
+            mticker.MaxNLocator.__init__(self, *args, **kwargs)
+
+        def __call__(self, *args, **kwargs):
+            return mticker.MaxNLocator.__call__(self, *args, **kwargs)
+
+    # at most 5 ticks, pruning the upper and lower so they don't overlap
+    # with other ticks
+    ax_ohlc.yaxis.set_major_locator(mticker.MaxNLocator(5, prune='both'))
+    if (ax_macd) :
+        ax_macd.yaxis.set_major_locator(mticker.MaxNLocator(5, prune='both'))
+
+    ax_ohlc.yaxis.set_major_locator(MyLocator(5, prune='both'))
+    if (ax_macd) :
+        ax_macd.yaxis.set_major_locator(MyLocator(5, prune='both'))
+
+    plt.show()
+
+
+def format_rsi_axis(axis, df_rsi) :
+    """Convenience fn used by plot_daily_ticker(): Format the RSI axis of 
+    ticker plot. 
+    """
+    textsize = 9
+    fillcolor = 'darkgoldenrod'
+    date = df_rsi.index
+    rsi = df_rsi['RSI']
+
+    axis.plot(date, rsi, color=fillcolor)
+    axis.axhline(70, color='red', alpha=0.3)
+    axis.axhline(30, color='green', alpha=0.3)
+    axis.fill_between(date, rsi, 70, where=(rsi >= 70), facecolor='red', 
+        edgecolor='red', alpha=0.3)
+    axis.fill_between(date, rsi, 30, where=(rsi <= 30), facecolor='green', 
+        edgecolor='green', alpha=0.3)
+    axis.text(0.6, 0.9, '>70 = overbought', va='top', transform=axis.transAxes, 
+        fontsize=textsize)
+    axis.text(0.6, 0.1, '<30 = oversold', transform=axis.transAxes, 
+        fontsize=textsize)
+    axis.set_ylim(0, 100)
+    axis.set_yticks([30, 70])
+    axis.text(0.025, 0.95, 'RSI (14)', va='top', transform=axis.transAxes, 
+        fontsize=textsize)
+
+
+def format_ohlc_axis(axis, ohlc_df, overlays_df) :
+    """Convenience fn used by plot_daily_ticker(): Format the OHLC axis for a 
+    plot.
+    """
+    # convenience vars
+    date = ohlc_df.index
+    low = ohlc_df['Low']
+    high = ohlc_df['High']
+    op = ohlc_df['Open']
+    cl = ohlc_df['Close']
+    
+    # get days that were up
+    up = cl >= op
+
+    # Adjust width of candlestick appropriately
+    # FIXME: this is currently a hack based on typical plot size
+    if (len(ohlc_df) < 100) :
+        width = 5
+        alpha = 1.0
+    elif (len(ohlc_df) < 150) :
+        width = 3
+        alpha = 1.0
+    else :
+        width = 1
+        alpha = 0.4
+        
+    # high and low
+    axis.vlines(date[up], low[up], high[up], color='green', label='_nolegend_',
+        alpha=alpha)
+    axis.vlines(date[~up], low[~up], high[~up], color='red', label='_nolegend_',
+        alpha=alpha)
+    # open and close
+    axis.vlines(date[up], op[up], cl[up], color='green', label='_nolegend_', 
+        linewidths=width)
+    axis.vlines(date[~up], op[~up], cl[~up], color='red', label='_nolegend_', 
+        linewidths=width)
+
+    axis.plot(date, cl, color='black', label='Close', alpha=0.3)
+    
+    # Plot overlays
+    if overlays_df is not None:
+        overlays_df.plot(ax=axis)
+
+
+def format_volume_axis(axis, ohlcv_df) :
+    """Convenience fn used by plot_daily_ticker(): Format the volume axis for 
+    a plot.
+    """
+    r = ohlcv_df
+    fillcolor = 'darkgoldenrod'
+    volume = (r['Close']*r['Volume'])/1e6  # dollar volume in millions
+    vmax = volume.max()
+    date = ohlcv_df.index
+    
+    axis.fill_between(date, volume, 0, label='Volume', facecolor=fillcolor, 
+        edgecolor=fillcolor, alpha=0.1)
+    axis.set_ylim(0, 1.05*vmax)
+    axis.set_yticks([])
+
+
+def get_plot_ohlcv_summary_str(ohlcv_df) :
+    """Gets a one-line summary string for a range of OHLCV data.
+    """
+    first = ohlcv_df.iloc[0]
+    last = ohlcv_df.iloc[-1]
+    
+    start_date = ohlcv_df.index[0]
+    end_date = ohlcv_df.index[-1]
+    date_format_str = '%d-%b-%Y'
+    op = first['Open']
+    cl = last['Close']
+    high = ohlcv_df['High'].max()
+    low = ohlcv_df['Low'].min()
+    volume = ohlcv_df['Volume'].sum()
+    
+    s = '%s to %s: O:%1.2f H:%1.2f L:%1.2f C:%1.2f V:%1.1fM Chg:%+1.2f%%' 
+    s = s % (start_date.strftime(date_format_str), 
+        end_date.strftime(date_format_str),
+        op, high, low, cl, volume*1e-6, cl - op)
+    return s
+
+
+def format_macd_axis(axis, df_macd) :
+    """Convenience fn used by plot_daily_ticker(): Format the MACD axis of a 
+    plot.
+    """
+    # compute the MACD indicator
+    fillcolor = 'darkslategrey'
+    textsize = 9
+    
+    date = df_macd.index
+    macd = df_macd['MACD']
+    signal = df_macd['Signal']
+    hist = df_macd['Histogram']
+    
+    axis.plot(date, macd, color='black', lw=1, alpha=0.3)
+    axis.plot(date, signal, color='blue', lw=1, alpha=0.3)
+    axis.fill_between(date, hist, 0, alpha=0.5, facecolor=fillcolor, 
+        edgecolor=fillcolor)
+
+    axis.text(0.025, 0.95, 'MACD', va='top', transform=axis.transAxes, 
+        fontsize=textsize)

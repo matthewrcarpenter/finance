@@ -1,0 +1,6 @@
+Notebooks/finance.py
+Notebooks/data
+Notebooks/.ipynb_checkpoints/
+Notebooks/__pycache__/
+__pycache__/
+data/
