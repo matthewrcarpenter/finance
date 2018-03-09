@@ -213,6 +213,28 @@ def use_data_frame_if_inplace(data_frame, inplace) :
         return data_frame.copy()
 
 
+
+def add_bollinger_bands(data_frame, column, num_days=20, inplace=False) :
+    """Adds Bollinger Bands columns to a DataFrame.
+    """
+    assert isinstance(data_frame, pd.DataFrame), \
+        "data_frame must be pandas.DataFrame object"
+ 
+    df = use_data_frame_if_inplace(data_frame, inplace)
+
+    # Calculate SMA, then get SMA as Series
+    sma = add_sma_column(df, column, num_days, inplace=True)
+    sma = sma[f'{column} SMA{num_days}']
+    # ... calculate rolling Standard Deviation of values
+    msd = pd.Series(df[column]).rolling(window=num_days, center=False).std()
+
+    # Create Hi and Lo Bollinger Bands
+    df[f'{column} BBandHi{num_days}'] = sma + (2 * msd)
+    df[f'{column} BBandLo{num_days}'] = sma - (2 * msd)
+
+    return df
+
+
 def add_ema_column(data_frame, column, num_days, inplace=False) :
     """Add a column with Exponential Moving Average (EMA) data to a DataFrame.
 
@@ -608,26 +630,26 @@ def create_fitted_line_df(data_frame, column, fitted_column) :
     return df
 
 
-def plot_daily_ticker(ohlcv_df, title=None, macd_df=None, rsi_df=None, overlays_df=None) :
+def plot_daily_ticker(ohlcv, title=None, macd=None, rsi=None, overlay=None) :
     """Plots a daily candlestick chart for ticker OHLCV data.
 
     This code is based on 
     https://matplotlib.org/1.5.1/examples/pylab_examples/finance_work2.html
     
     Args:
-        ohlcv_df: DataFrame containing OHLCV data. Must contain date index and 
+        ohlcv: DataFrame containing OHLCV data. Must contain date index and 
             columns name 'Open', 'High', 'Low', 'Close', and 'Volume'.
-        macd_df: DataFrame containing the MACD columns associated with ohlcv_df.
-        rsi_df: DataFrame containing the RSI column associated with ohlcv_df
-        overlays_df: DataFrame containing other columns to overlay onto the 
-        OHLC plot. All columns in overlays_df will be plotted. 
+        macd: DataFrame containing the MACD columns associated with ohlcv.
+        rsi: DataFrame containing the RSI column associated with ohlcv
+        overlay: DataFrame containing other columns to overlay onto the 
+        OHLC plot. All columns in overlay will be plotted. 
     """
-    assert isinstance(ohlcv_df, pd.DataFrame), \
-        "ohlcv_df must be pandas.DataFrame object"
+    assert isinstance(ohlcv, pd.DataFrame), \
+        "ohlcv must be pandas.DataFrame object"
     
     # Get start and end dates for date axis, pad for plotting
-    start_date = ohlcv_df.index[0] - dt.timedelta(0.5)
-    end_date = ohlcv_df.index[-1] + dt.timedelta(0.5)
+    start_date = ohlcv.index[0] - dt.timedelta(0.5)
+    end_date = ohlcv.index[-1] + dt.timedelta(0.5)
     label_axis = None
     no_label_axes = []
     
@@ -649,31 +671,30 @@ def plot_daily_ticker(ohlcv_df, title=None, macd_df=None, rsi_df=None, overlays_
         title=''
 
     # RSI
-    if rsi_df is not None :
+    if rsi is not None :
         ax_rsi = fig.add_axes(rect_rsi, 
             facecolor=axescolor)  # left, bottom, width, height
-        rsi = rsi_df[start_date:end_date]
-        format_rsi_axis(ax_rsi, rsi)
+        format_rsi_axis(ax_rsi, rsi[start_date:end_date])
         no_label_axes.append(ax_rsi)
         ax_rsi.set_title(f'{title}')
 
     # OHLC
     ax_ohlc = fig.add_axes(rect_ohlcv, facecolor=axescolor, sharex=ax_rsi)
-    if overlays_df is not None:
-        overlays = overlays_df[start_date:end_date]
+    if overlay is not None:
+        overlays = overlay[start_date:end_date]
     else :
         overlays = None
-    format_ohlc_axis(ax_ohlc, ohlcv_df, overlays)
-    if rsi_df is None :
+    format_ohlc_axis(ax_ohlc, ohlcv, overlays)
+    if rsi is None :
         ax_ohlc.set_title(f'{title}')
 
     # Volume
     ax_vol = ax_ohlc.twinx()
-    format_volume_axis(ax_vol, ohlcv_df)
+    format_volume_axis(ax_vol, ohlcv)
     no_label_axes.append(ax_vol)
 
     # ... summary string 
-    s = get_plot_ohlcv_summary_str(ohlcv_df)
+    s = get_plot_ohlcv_summary_str(ohlcv)
     ax_ohlc.text(0.3, 0.95, s, transform=ax_ohlc.transAxes, 
         fontsize=textsize+1)
 
@@ -684,10 +705,9 @@ def plot_daily_ticker(ohlcv_df, title=None, macd_df=None, rsi_df=None, overlays_
 
     # MACD
     ax_macd = None
-    if macd_df is not None :
+    if macd is not None :
         ax_macd = fig.add_axes(rect_macd, facecolor=axescolor, sharex=ax_ohlc)
-        macd = macd_df[start_date:end_date]
-        format_macd_axis(ax_macd, macd)
+        format_macd_axis(ax_macd, macd[start_date:end_date])
         no_label_axes.append(ax_ohlc)
         label_axis = ax_macd
     else :
