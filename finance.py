@@ -341,7 +341,7 @@ def add_sma_column(data_frame, column, num_days, inplace=False) :
     return df
 
 
-def add_sma_columns(data_frame, column, ema_periods_list=[12, 26], 
+def add_sma_columns(data_frame, column, sma_periods_list=[12, 26], 
     inplace=False) :
     """Add several columns to a DataFrame containing the Simple Moving Averages 
     (SMAs) of values in column for various periods."""
@@ -386,74 +386,6 @@ def get_pct_diff(measured, expected) :
     """Calcuate the percent difference between measured and expected values."""
     return 100*(measured - expected)/expected
 
-
-def create_ema_pct_diff_df(data_frame, column, 
-        ema_periods_list=[12, 26]) :
-    """Create a DataFrame containing base values plus several columns of percent 
-    difference between those values and the Exponential Moving Averages (EMAs) 
-    of those values for various periods.
-    """
-    assert isinstance(data_frame, pd.DataFrame), \
-        "data_frame must be pandas.DataFrame object"
-
-    df = pd.DataFrame(data_frame[column])
-    return add_ema_pct_diff_columns(df, column, ema_periods_list, inplace=True)
-
-
-def create_sma_pct_diff_df(data_frame, column, 
-        sma_periods_list=[6, 12]) :
-    """Create a DataFrame containing base values plus several columns of percent 
-    difference between those values and the Simple Moving Averages (EMAs) of 
-    those values for various periods.
-    """
-    assert isinstance(data_frame, pd.DataFrame), \
-        "data_frame must be pandas.DataFrame object"
-
-    df = pd.DataFrame(data_frame[column])
-    return df.add_sma_pct_diff_columns(df, column, sma_periods_list, 
-        inplace=True)
-
-
-def create_ema_df(data_frame, column, ema_periods_list=[12, 26]) :
-    """Create a DataFrame containing base values plus several columns of the 
-    Exponential Moving Averages (EMAs) of those values for various periods.
-    """
-    assert isinstance(data_frame, pd.DataFrame), \
-        "data_frame must be pandas.DataFrame object"
-
-    df = pd.DataFrame(data_frame[column])
-    return add_ema_columns(df, column, ema_periods_list, inplace=True)
-
-
-def create_sma_df(data_frame, column, sma_periods_list=[6, 12]) :
-    """Create a DataFrame containing base values plus several columns of the 
-    Simple Moving Averages (SMAs) of those values for various periods.
-    """
-    assert isinstance(data_frame, pd.DataFrame), \
-        "data_frame must be pandas.DataFrame object"
-
-    df = pd.DataFrame(data_frame[column])
-    return add_sma_columns(df, column, sma_periods_list, inplace=True)
-    
-
-def create_macd_df(data_frame, column) :
-    """Create a new DataFrame containing base values for column, plus MACD 
-    (Moving Average Convergence/Divergence) columns.
-    
-    Args:
-        data_frame: DataFrame of interest.
-        column: String containing the column name with the data of interest.
- 
-    Returns:
-        DataFrame with column plus added columns for: 'EMA12', 'EMA26', 'MACD', 
-        'MACD EMA9', 'MACD Hist'. All of the listed columns will be prepended 
-        with the column argument (e.g., f'{column} EMA12'). 
-    """
-    assert isinstance(data_frame, pd.DataFrame), \
-        "data_frame must be pandas.DataFrame object"
-    df = pd.DataFrame(data_frame[column])
-    return add_macd_columns(df, column, inplace=True)
-    
 
 def create_google_trends_sma_pct_diff_df(data_frame, search, 
         sma_periods_list=[3,5,10,20,50,100,200]) :
