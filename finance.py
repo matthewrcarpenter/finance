@@ -37,13 +37,19 @@ def create_ml_features_df(data_frame) :
     assert isinstance(data_frame, pd.DataFrame), \
         "data_frame must be pandas.DataFrame object"
 
-    data = create_days_since_valid_date(data_frame, 'Days Since Trading')
+    days_since_col = 'Days Since Trading'
+    data = create_days_since_valid_date(data_frame, days_since_col)
+    # First row will have 0, replace with 1
+    data.loc[data[days_since_col] == 0, days_since_col] = 1
 
     # Get the days until next day of trading. Reverse sort data, call same 
     # function as above, then resort in normal order.
     data.sort_index(ascending=False, inplace=True)
-    data = create_days_since_valid_date(data, 'Days Until Trading')
+    days_until_col = 'Days Until Trading'
+    data = create_days_since_valid_date(data, days_until_col)
     data.sort_index(ascending=True, inplace=True)
+    # Last row will have 0, replace with 1
+    data.loc[data[days_until_col] == 0, days_until_col] = 1
 
     # Add separate columns for various date parts (month, day, etc.)
     data = data.reset_index()
