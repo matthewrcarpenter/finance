@@ -132,11 +132,11 @@ def get_df_end_date(data_frame) :
     return max(data_frame.index).date()
 
 
-def get_price_data(ticker) :
+def get_price_data(ticker, update=True) :
     """Get a DataFrame with the price data for ticker. Rows with NA values will 
     be removed from data."""
     # Defualt to yahoo for now
-    data = get_price_data_yahoo(ticker).dropna()
+    data = get_price_data_yahoo(ticker, update).dropna()
     
     start_date = get_df_start_date(data)
     end_date = get_df_end_date(data)
@@ -187,7 +187,7 @@ def update_price_data_yahoo(price_data, ticker) :
     return updated_data        
 
 
-def get_price_data_yahoo(ticker) :
+def get_price_data_yahoo(ticker, update) :
     """Get raw ticker price data from yahoo. No data cleaning is performed on 
     data."""
     start = dt.datetime(1970, 1, 1)
@@ -200,7 +200,8 @@ def get_price_data_yahoo(ticker) :
         # read local copy
         price_data = pd.read_csv(price_data_path, parse_dates=True, index_col=0)
         # try to update
-        price_data = update_price_data_yahoo(price_data, ticker)
+        if (update) :
+            price_data = update_price_data_yahoo(price_data, ticker)
     except :
         print(f'Could not read file: {price_data_path}. ' 
             f'Downloading data for "{ticker}" from yahoo.com...')
